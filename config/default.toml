@@ -1,0 +1,41 @@
+# AppImage Auto-Integration Configuration
+# This file is auto-generated with default values.
+# Edit to customize behavior.
+
+[watch]
+# Directories to watch for AppImages
+directories = [
+    "~/Downloads",
+    "~/Applications",
+    "~/.local/bin",
+]
+
+# File patterns to match (in addition to magic byte detection)
+patterns = [
+    "*.AppImage",
+    "*.appimage",
+]
+
+# Debounce delay in milliseconds
+# Prevents processing files that are still being written
+debounce_ms = 1000
+
+[integration]
+# Directory for .desktop files
+desktop_dir = "~/.local/share/applications"
+
+# Directory for icons
+icon_dir = "~/.local/share/icons/hicolor"
+
+# Run update-desktop-database after changes
+update_database = true
+
+# Scan existing AppImages when daemon starts
+scan_on_startup = true
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
+
+# Optional log file path (comment out to log only to stderr)
+# file = "~/.local/share/appimage-auto/daemon.log"

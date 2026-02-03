@@ -1,0 +1,27 @@
+[Unit]
+Description=AppImage Auto-Integration Daemon
+Documentation=https://github.com/caleb/appimage-auto
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.cargo/bin/appimage-auto daemon
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.local/share/applications
+ReadWritePaths=%h/.local/share/icons
+ReadWritePaths=%h/.config/appimage-auto
+ReadWritePaths=%h/.local/share/appimage-auto
+
+# Allow access to common AppImage locations
+ReadWritePaths=%h/Downloads
+ReadWritePaths=%h/Applications
+ReadWritePaths=%h/.local/bin
+
+[Install]
+WantedBy=default.target
