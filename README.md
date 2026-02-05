@@ -21,6 +21,8 @@ just want something that:
 
 **appimage-auto** does one thing well: watch directories and automatically integrate AppImages into your desktop menu.
 
+![appimage-auto GUI overview](mainwindow.png)
+
 ## Features
 
 - **Automatic Integration**: Detects new AppImages and creates menu entries
