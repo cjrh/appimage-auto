@@ -310,6 +310,59 @@ journalctl --user -u appimage-auto -f
 systemctl --user disable appimage-auto
 ```
 
+## GUI Settings Application
+
+A graphical settings application is available for managing AppImage integrations, watch directories, and daemon configuration.
+
+### Building the GUI
+
+The GUI requires GTK4 and libadwaita development libraries:
+
+```bash
+# Fedora
+sudo dnf install gtk4-devel libadwaita-devel
+
+# Ubuntu/Debian
+sudo apt install libgtk-4-dev libadwaita-1-dev
+
+# Arch
+sudo pacman -S gtk4 libadwaita
+```
+
+Build and run:
+
+```bash
+# Build with GUI feature
+cargo build --features gui
+
+# Run the GUI
+cargo run --bin appimage-auto-gui --features gui
+
+# Or using just
+just run-gui
+```
+
+### Installing the GUI
+
+```bash
+# Build and install
+just install-gui
+
+# This installs:
+# - ~/.cargo/bin/appimage-auto-gui
+# - ~/.local/share/applications/appimage-auto-gui.desktop
+```
+
+### GUI Features
+
+- **Overview**: View daemon status, integrated app count, and watched directories
+- **Apps**: List all integrated AppImages with options to remove or open file locations
+- **Settings**:
+  - Add/remove watch directories
+  - Configure notification preferences
+  - Adjust daemon settings (log level, debounce delay)
+  - Enable/disable XDG autostart
+
 ## Troubleshooting
 
 ### AppImage not appearing in menu

@@ -11,6 +11,9 @@ pub mod notifications;
 pub mod state;
 pub mod watcher;
 
+#[cfg(feature = "gui")]
+pub mod gui;
+
 pub use config::Config;
 pub use daemon::Daemon;
 pub use state::State;

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AppImage Auto Settings
+GenericName=AppImage Integration Settings
+Comment=Configure automatic AppImage integration
+Exec=appimage-auto-gui
+Icon=appimage-auto
+Terminal=false
+Categories=Settings;GTK;
+Keywords=AppImage;Integration;Settings;
+StartupNotify=true

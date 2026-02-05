@@ -152,3 +152,37 @@ watch:
 # Watch for changes and run clippy
 watch-lint:
     cargo watch -x clippy
+
+# Build GUI with gtk4/libadwaita
+build-gui:
+    cargo build --features gui
+
+# Build GUI in release mode
+release-gui:
+    cargo build --release --features gui
+
+# Build and strip release GUI binary
+release-gui-stripped: release-gui
+    strip target/release/appimage-auto-gui
+    @ls -lh target/release/appimage-auto-gui
+
+# Run the GUI
+run-gui:
+    cargo run --bin appimage-auto-gui --features gui
+
+# Install GUI binary and desktop file
+install-gui: release-gui-stripped
+    install -Dm755 target/release/appimage-auto-gui ~/.cargo/bin/appimage-auto-gui
+    install -Dm644 desktop/appimage-auto-gui.desktop ~/.local/share/applications/appimage-auto-gui.desktop
+    @echo "Installed GUI to ~/.cargo/bin/appimage-auto-gui"
+    @echo "Desktop entry installed to ~/.local/share/applications/"
+
+# Uninstall GUI
+uninstall-gui:
+    -rm ~/.cargo/bin/appimage-auto-gui
+    -rm ~/.local/share/applications/appimage-auto-gui.desktop
+    @echo "GUI uninstalled"
+
+# Full install including GUI
+install-all-gui: install install-gui
+    @echo "Full installation with GUI complete!"
