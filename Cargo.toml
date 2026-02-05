@@ -20,10 +20,10 @@ tokio = { version = "1", features = ["full"] }
 
 # File watching (inotify wrapper)
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
-notify-debouncer-mini = "0.6"
+notify-debouncer-mini = "0.7"
 
 # Configuration
-toml = "0.8"
+toml = "0.9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -37,7 +37,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Utilities
 thiserror = "2"
 directories = "6"
-md5 = "0.7"
+md5 = "0.8"
 shellexpand = "3"
 ctrlc = "3"
 tempfile = "3"
@@ -56,17 +56,17 @@ path = "src/bin/appimage-auto-gui.rs"
 required-features = ["gui"]
 
 [dependencies.relm4]
-version = "0.9"
+version = "0.10"
 optional = true
 features = ["libadwaita"]
 
 [dependencies.libadwaita]
-version = "0.7"
+version = "0.8"
 optional = true
 features = ["v1_4"]
 
 [dependencies.dirs]
-version = "5"
+version = "6"
 optional = true
 
 [dev-dependencies]
