@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=AppImage Auto-Integration
+GenericName=AppImage Daemon
+Comment=Automatically integrate AppImages into the desktop environment
+Exec=appimage-auto daemon
+Icon=appimage-auto
+Terminal=false
+NoDisplay=true
+Categories=Utility;System;
+X-GNOME-Autostart-enabled=true
+StartupNotify=false

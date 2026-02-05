@@ -54,6 +54,26 @@ systemctl --user daemon-reload
 systemctl --user enable --now appimage-auto
 ```
 
+### XDG Autostart (Alternative to systemd)
+
+The XDG autostart entry starts the daemon automatically when you log in to your desktop session. This is a simpler alternative to systemd that works across all major desktop environments (GNOME, KDE, XFCE, Cinnamon, MATE, etc.) following the [freedesktop.org autostart specification](https://specifications.freedesktop.org/autostart/0.5).
+
+```bash
+# Install
+install -Dm644 autostart/appimage-auto.desktop ~/.config/autostart/appimage-auto.desktop
+
+# Or using just
+just autostart-install
+```
+
+To disable without removing:
+```bash
+# Add Hidden=true to the file, or use your desktop's Startup Applications settings
+
+# Or uninstall completely
+just autostart-uninstall
+```
+
 ### Verify Installation
 
 ```bash

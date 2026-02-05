@@ -71,6 +71,16 @@ install-service:
     systemctl --user daemon-reload
     @echo "Service installed. Enable with: systemctl --user enable --now appimage-auto"
 
+# Install XDG autostart entry (alternative to systemd)
+autostart-install:
+    install -Dm644 autostart/appimage-auto.desktop ~/.config/autostart/appimage-auto.desktop
+    @echo "Autostart entry installed. The daemon will start on next login."
+
+# Uninstall XDG autostart entry
+autostart-uninstall:
+    -rm ~/.config/autostart/appimage-auto.desktop
+    @echo "Autostart entry removed."
+
 # Full install (binary + service)
 install-all: install install-service
     @echo "Installation complete!"
