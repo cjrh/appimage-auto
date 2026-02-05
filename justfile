@@ -186,3 +186,151 @@ uninstall-gui:
 # Full install including GUI
 install-all-gui: install install-gui
     @echo "Full installation with GUI complete!"
+
+# Build release binaries and package into a distributable zip
+bundle: release-stripped release-gui-stripped
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VERSION=$(git describe --tags --exact-match HEAD 2>/dev/null || git rev-parse --short HEAD)
+    ZIPNAME="appimage-auto-${VERSION}-x86_64-linux.zip"
+    STAGING=$(mktemp -d)
+    trap 'rm -rf "$STAGING"' EXIT
+
+    mkdir -p "$STAGING/appimage-auto"/{bin,systemd,desktop,config,assets}
+
+    cp target/release/appimage-auto "$STAGING/appimage-auto/bin/"
+    if [[ -f target/release/appimage-auto-gui ]]; then
+        cp target/release/appimage-auto-gui "$STAGING/appimage-auto/bin/"
+    fi
+    cp systemd/appimage-auto.service "$STAGING/appimage-auto/systemd/"
+    cp desktop/appimage-auto-gui.desktop "$STAGING/appimage-auto/desktop/"
+    cp config/default.toml "$STAGING/appimage-auto/config/"
+    cp assets/icon.png "$STAGING/appimage-auto/assets/"
+    cp install.sh uninstall.sh "$STAGING/appimage-auto/"
+
+    (cd "$STAGING" && zip -r - appimage-auto/) > "$ZIPNAME"
+
+    echo "Bundled: $ZIPNAME ($(du -h "$ZIPNAME" | cut -f1))"
+
+# End-to-end test of bundle → install → verify → uninstall → verify
+bundle-test: bundle
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    red='\033[0;31m' green='\033[0;32m' bold='\033[1m' reset='\033[0m'
+    pass() { printf "${green}  PASS${reset} %s\n" "$*"; }
+    fail() { printf "${red}  FAIL${reset} %s\n" "$*"; FAILURES=$((FAILURES + 1)); }
+    section() { printf "\n${bold}--- %s ---${reset}\n" "$*"; }
+    check_exists()     { [[ -e "$1" ]] && pass "$1 exists"         || fail "$1 missing"; }
+    check_not_exists() { [[ ! -e "$1" ]] && pass "$1 removed"     || fail "$1 still exists"; }
+    check_executable() { [[ -x "$1" ]] && pass "$1 is executable" || fail "$1 not executable"; }
+
+    FAILURES=0
+    ZIPNAME=$(ls appimage-auto-*-x86_64-linux.zip 2>/dev/null | head -1)
+    if [[ -z "$ZIPNAME" ]]; then
+        echo "No bundle zip found" >&2; exit 1
+    fi
+
+    EXTRACT_DIR=$(mktemp -d)
+    trap 'rm -rf "$EXTRACT_DIR"; rm -f "$ZIPNAME"' EXIT
+
+    # ── Step 1: Verify zip contents ──────────────────────────────
+    section "Zip contents"
+    for entry in \
+        appimage-auto/bin/appimage-auto \
+        appimage-auto/systemd/appimage-auto.service \
+        appimage-auto/config/default.toml \
+        appimage-auto/assets/icon.png \
+        appimage-auto/install.sh \
+        appimage-auto/uninstall.sh; do
+        unzip -l "$ZIPNAME" | grep -q "$entry" && pass "$entry in zip" || fail "$entry missing from zip"
+    done
+
+    # ── Step 2: Extract and check permissions ────────────────────
+    section "Extract"
+    unzip -q "$ZIPNAME" -d "$EXTRACT_DIR"
+    check_executable "$EXTRACT_DIR/appimage-auto/bin/appimage-auto"
+    check_executable "$EXTRACT_DIR/appimage-auto/install.sh"
+    check_executable "$EXTRACT_DIR/appimage-auto/uninstall.sh"
+    if [[ -f "$EXTRACT_DIR/appimage-auto/bin/appimage-auto-gui" ]]; then
+        check_executable "$EXTRACT_DIR/appimage-auto/bin/appimage-auto-gui"
+    fi
+
+    # ── Step 3: Install ──────────────────────────────────────────
+    section "Install"
+    bash "$EXTRACT_DIR/appimage-auto/install.sh" 2>&1
+    check_executable "$HOME/.local/bin/appimage-auto"
+    check_exists "$HOME/.local/share/systemd/user/appimage-auto.service"
+    check_exists "$HOME/.local/share/icons/hicolor/256x256/apps/appimage-auto.png"
+    check_exists "$HOME/.config/appimage-auto/config.toml"
+
+    # Verify sed rewrites
+    if grep -q 'ExecStart=%h/.local/bin/appimage-auto' \
+        "$HOME/.local/share/systemd/user/appimage-auto.service"; then
+        pass "ExecStart rewritten to .local/bin"
+    else
+        fail "ExecStart not rewritten"
+    fi
+
+    if [[ -f "$HOME/.local/bin/appimage-auto-gui" ]]; then
+        check_executable "$HOME/.local/bin/appimage-auto-gui"
+        check_exists "$HOME/.local/share/applications/appimage-auto-gui.desktop"
+        if grep -q "Exec=$HOME/.local/bin/appimage-auto-gui" \
+            "$HOME/.local/share/applications/appimage-auto-gui.desktop"; then
+            pass "Desktop Exec has absolute path"
+        else
+            fail "Desktop Exec not rewritten"
+        fi
+    fi
+
+    # Binary runs
+    if "$HOME/.local/bin/appimage-auto" --help >/dev/null 2>&1; then
+        pass "appimage-auto --help"
+    else
+        fail "appimage-auto --help"
+    fi
+
+    # ── Step 4: Daemon starts ────────────────────────────────────
+    section "Daemon"
+    sleep 2
+    if systemctl --user is-active appimage-auto.service >/dev/null 2>&1; then
+        pass "Service is active"
+    else
+        fail "Service is not active"
+        journalctl --user -u appimage-auto -n 5 --no-pager 2>/dev/null || true
+    fi
+
+    # ── Step 5: Uninstall (keep data) ────────────────────────────
+    section "Uninstall (keep data)"
+    bash "$EXTRACT_DIR/appimage-auto/uninstall.sh" --keep-data 2>&1
+    check_not_exists "$HOME/.local/bin/appimage-auto"
+    check_not_exists "$HOME/.local/bin/appimage-auto-gui"
+    check_not_exists "$HOME/.local/share/systemd/user/appimage-auto.service"
+    check_not_exists "$HOME/.local/share/applications/appimage-auto-gui.desktop"
+    check_not_exists "$HOME/.local/share/icons/hicolor/256x256/apps/appimage-auto.png"
+    check_exists "$HOME/.config/appimage-auto"
+    if ! systemctl --user is-active appimage-auto.service >/dev/null 2>&1; then
+        pass "Service is not running"
+    else
+        fail "Service still running"
+    fi
+
+    # ── Step 6: Re-install, then uninstall (remove data) ────────
+    section "Uninstall (remove data)"
+    bash "$EXTRACT_DIR/appimage-auto/install.sh" 2>&1
+    sleep 1
+    bash "$EXTRACT_DIR/appimage-auto/uninstall.sh" --remove-data 2>&1
+    check_not_exists "$HOME/.local/bin/appimage-auto"
+    check_not_exists "$HOME/.local/share/systemd/user/appimage-auto.service"
+    check_not_exists "$HOME/.config/appimage-auto"
+    check_not_exists "$HOME/.local/share/appimage-auto"
+
+    # ── Summary ──────────────────────────────────────────────────
+    echo ""
+    if [[ $FAILURES -eq 0 ]]; then
+        printf "${green}${bold}All checks passed.${reset}\n"
+    else
+        printf "${red}${bold}%d check(s) failed.${reset}\n" "$FAILURES"
+        exit 1
+    fi
