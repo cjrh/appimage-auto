@@ -1,7 +1,7 @@
 //! AppImage detection, extraction, and integration logic.
 
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use thiserror::Error;
@@ -15,6 +15,9 @@ const APPIMAGE_TYPE1_MAGIC: [u8; 3] = [0x41, 0x49, 0x01];
 
 /// AppImage Type 2 magic at offset 8: "AI\x02"
 const APPIMAGE_TYPE2_MAGIC: [u8; 3] = [0x41, 0x49, 0x02];
+
+/// SquashFS superblock magic number (little-endian: "hsqs")
+const SQUASHFS_MAGIC: [u8; 4] = [0x68, 0x73, 0x71, 0x73];
 
 #[derive(Error, Debug)]
 pub enum AppImageError {
@@ -107,6 +110,100 @@ fn check_magic_bytes(path: &Path) -> Result<Option<AppImageType>, AppImageError>
 /// Get the AppImage type
 pub fn get_appimage_type(path: &Path) -> Result<AppImageType, AppImageError> {
     check_magic_bytes(path)?.ok_or_else(|| AppImageError::NotAppImage(path.display().to_string()))
+}
+
+/// Check if an AppImage file is complete (not a partial download)
+///
+/// Validates by reading the SquashFS superblock's `bytes_used` field
+/// and comparing against actual file size. This detects incomplete files
+/// that may still be downloading or copying.
+///
+/// # Returns
+/// - `Ok(true)` if the file is structurally complete
+/// - `Ok(false)` if the file is incomplete or cannot be validated
+/// - `Err(_)` if there was an I/O error reading the file
+pub fn is_appimage_complete(path: &Path) -> Result<bool, AppImageError> {
+    let mut file = File::open(path)?;
+    let file_size = file.metadata()?.len();
+
+    // Get squashfs offset using --appimage-offset (requires executable)
+    let offset = match get_squashfs_offset(path) {
+        Ok(o) => o,
+        Err(e) => {
+            debug!("Could not get squashfs offset for {:?}: {}", path, e);
+            return Ok(false);
+        }
+    };
+
+    // Seek to squashfs superblock
+    if file.seek(SeekFrom::Start(offset)).is_err() {
+        debug!("Could not seek to offset {} in {:?}", offset, path);
+        return Ok(false);
+    }
+
+    // Read superblock header (need at least 48 bytes to get bytes_used)
+    let mut superblock = [0u8; 96];
+    let bytes_read = file.read(&mut superblock)?;
+    if bytes_read < 48 {
+        debug!(
+            "File too small to read squashfs superblock: {} bytes read",
+            bytes_read
+        );
+        return Ok(false);
+    }
+
+    // Verify squashfs magic
+    if superblock[0..4] != SQUASHFS_MAGIC {
+        debug!(
+            "Invalid squashfs magic at offset {}: {:02x?}",
+            offset,
+            &superblock[0..4]
+        );
+        return Ok(false);
+    }
+
+    // Read bytes_used (little-endian u64 at offset 40 in superblock)
+    let bytes_used = u64::from_le_bytes(
+        superblock[40..48]
+            .try_into()
+            .expect("slice is exactly 8 bytes"),
+    );
+
+    // Check if file is complete
+    let expected_size = offset + bytes_used;
+    let is_complete = file_size >= expected_size;
+
+    debug!(
+        "AppImage completeness check: file_size={}, offset={}, bytes_used={}, expected={}, complete={}",
+        file_size, offset, bytes_used, expected_size, is_complete
+    );
+
+    Ok(is_complete)
+}
+
+/// Get squashfs offset by running --appimage-offset
+///
+/// This requires the AppImage to be executable. If it's not, we'll make it
+/// executable first.
+fn get_squashfs_offset(path: &Path) -> Result<u64, AppImageError> {
+    // Ensure the AppImage is executable first
+    make_executable(path)?;
+
+    let output = Command::new(path).arg("--appimage-offset").output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(AppImageError::ExtractionFailed(format!(
+            "--appimage-offset failed: {}",
+            stderr
+        )));
+    }
+
+    let offset_str = String::from_utf8_lossy(&output.stdout);
+    offset_str
+        .trim()
+        .parse::<u64>()
+        .map_err(|e| AppImageError::ExtractionFailed(format!("Invalid offset '{}': {}", offset_str.trim(), e)))
 }
 
 /// Make an AppImage executable

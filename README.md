@@ -8,9 +8,16 @@ Existing solutions have issues:
 
 | Tool | Problem |
 |------|---------|
-| **go-appimaged** | Bloated with unnecessary features (Zeroconf, PubSub, P2P/IPFS, Firejail) |
+| **go-appimaged** | Large surface area with extra features I don't need (Zeroconf, PubSub, P2P/IPFS, Firejail) |
 | **AppImageLauncher** | Unmaintained since 2020, crashes on modern distros, uses problematic LD_PRELOAD |
 | **Gear Lever** | Manual only, requires drag-and-drop |
+
+You probably want `go-appimaged`. It is a "big" project with a larger team and more features. I
+just want something that:
+- notices I downloaded an AppImage,
+- makes it executable,
+- creates a .desktop file with the correct path and icon.
+- *bonus* watches for moves and deletions to keep the desktop file updated.
 
 **appimage-auto** does one thing well: watch directories and automatically integrate AppImages into your desktop menu.
 

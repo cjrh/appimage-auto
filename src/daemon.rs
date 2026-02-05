@@ -5,11 +5,12 @@ use crate::config::Config;
 use crate::desktop;
 use crate::state::{self, IntegratedAppImage, State};
 use crate::watcher::{FileEvent, FileWatcher};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
@@ -36,6 +37,8 @@ pub struct Daemon {
     state: State,
     watcher: FileWatcher,
     running: Arc<AtomicBool>,
+    /// Pending events for debouncing (path → (event, timestamp))
+    pending_events: HashMap<PathBuf, (FileEvent, Instant)>,
 }
 
 impl Daemon {
@@ -50,6 +53,7 @@ impl Daemon {
             state,
             watcher,
             running: Arc::new(AtomicBool::new(false)),
+            pending_events: HashMap::new(),
         })
     }
 
@@ -64,6 +68,7 @@ impl Daemon {
             state,
             watcher,
             running: Arc::new(AtomicBool::new(false)),
+            pending_events: HashMap::new(),
         })
     }
 
@@ -157,16 +162,16 @@ impl Daemon {
     pub fn run(&mut self) -> Result<(), DaemonError> {
         self.running.store(true, Ordering::SeqCst);
         info!(
-            "Daemon running. Watching {} directories.",
-            self.watcher.watched_directories().len()
+            "Daemon running. Watching {} directories. Debounce: {}ms",
+            self.watcher.watched_directories().len(),
+            self.config.watch.debounce_ms
         );
 
         while self.running.load(Ordering::SeqCst) {
+            // Check for new events
             match self.watcher.next_event_timeout(Duration::from_millis(100)) {
                 Ok(Some(event)) => {
-                    if let Err(e) = self.handle_event(event) {
-                        error!("Error handling event: {}", e);
-                    }
+                    self.queue_event(event);
                 }
                 Ok(None) => {
                     // Timeout, continue loop
@@ -176,20 +181,85 @@ impl Daemon {
                     break;
                 }
             }
+
+            // Process debounced events that are ready
+            if let Err(e) = self.process_pending_events() {
+                error!("Error processing pending events: {}", e);
+            }
         }
 
         info!("Daemon stopped");
         Ok(())
     }
 
+    /// Queue an event for debounced processing
+    fn queue_event(&mut self, event: FileEvent) {
+        let now = Instant::now();
+
+        match &event {
+            // Debounce Created and Modified events
+            FileEvent::Created(path) | FileEvent::Modified(path) => {
+                debug!("Queuing event for debounce: {:?}", path);
+                self.pending_events.insert(path.clone(), (event, now));
+            }
+            // Process Deleted and Moved immediately (no debounce needed)
+            FileEvent::Deleted(_) | FileEvent::Moved { .. } => {
+                if let Err(e) = self.handle_event(event) {
+                    error!("Error handling event: {}", e);
+                }
+            }
+        }
+    }
+
+    /// Process pending events that have exceeded the debounce duration
+    fn process_pending_events(&mut self) -> Result<(), DaemonError> {
+        let debounce_duration = Duration::from_millis(self.config.watch.debounce_ms);
+        let now = Instant::now();
+
+        // Collect ready events (elapsed >= debounce_duration)
+        let ready: Vec<_> = self
+            .pending_events
+            .iter()
+            .filter(|(_, (_, timestamp))| now.duration_since(*timestamp) >= debounce_duration)
+            .map(|(path, (event, _))| (path.clone(), event.clone()))
+            .collect();
+
+        // Process and remove ready events
+        for (path, event) in ready {
+            self.pending_events.remove(&path);
+            if let Err(e) = self.handle_event(event) {
+                error!("Error handling debounced event for {:?}: {}", path, e);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Handle a file system event
     fn handle_event(&mut self, event: FileEvent) -> Result<(), DaemonError> {
         match event {
-            FileEvent::Created(path) => {
+            FileEvent::Created(ref path) => {
                 debug!("File created: {:?}", path);
-                if appimage::is_appimage(&path) {
-                    info!("New AppImage detected: {:?}", path);
-                    self.integrate(&path)?;
+                if appimage::is_appimage(path) {
+                    // Check if file is complete before integrating
+                    match appimage::is_appimage_complete(path) {
+                        Ok(true) => {
+                            info!("New complete AppImage detected: {:?}", path);
+                            self.integrate(path)?;
+                        }
+                        Ok(false) => {
+                            debug!("AppImage incomplete, re-queuing: {:?}", path);
+                            // Re-queue for later check
+                            self.pending_events
+                                .insert(path.clone(), (event, Instant::now()));
+                        }
+                        Err(e) => {
+                            warn!("Could not verify completeness for {:?}: {}", path, e);
+                            // Try integration anyway (fallback to previous behavior)
+                            info!("New AppImage detected (unverified): {:?}", path);
+                            self.integrate(path)?;
+                        }
+                    }
                 }
             }
 
@@ -213,7 +283,7 @@ impl Daemon {
                 }
             }
 
-            FileEvent::Modified(path) => {
+            FileEvent::Modified(ref path) => {
                 debug!("File modified: {:?}", path);
                 // For now, we don't re-integrate on modification
                 // Could be extended to detect significant changes
