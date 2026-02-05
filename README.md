@@ -29,6 +29,7 @@ just want something that:
 - **Move Tracking**: Updates menu entries when AppImages are moved within watched directories
 - **Cleanup**: Removes menu entries when AppImages are deleted
 - **Startup Scan**: Integrates existing AppImages when the daemon starts
+- **Desktop Notifications**: Optional notifications when apps are integrated or removed
 - **Desktop Agnostic**: Uses freedesktop.org standards (works with GNOME, KDE, XFCE, etc.)
 
 ## Installation
@@ -43,6 +44,9 @@ cargo build --release
 
 # Install binary
 install -Dm755 target/release/appimage-auto ~/.cargo/bin/appimage-auto
+
+# Install icon (for notifications)
+install -Dm644 assets/icon.png ~/.local/share/icons/hicolor/256x256/apps/appimage-auto.png
 
 # Install and enable systemd service
 install -Dm644 systemd/appimage-auto.service ~/.local/share/systemd/user/appimage-auto.service
@@ -133,6 +137,16 @@ scan_on_startup = true
 
 [logging]
 level = "info"  # trace, debug, info, warn, error
+
+[notifications]
+# Enable desktop notifications
+enabled = true
+
+# Notify when an AppImage is integrated
+on_integrate = true
+
+# Notify when an AppImage is removed
+on_unintegrate = true
 ```
 
 ## How It Works
@@ -202,6 +216,7 @@ State is persisted to `~/.local/share/appimage-auto/state.json`:
 | `desktop.rs` | .desktop file parsing and generation |
 | `state.rs` | JSON-based state persistence |
 | `daemon.rs` | Main event loop coordinating all components |
+| `notifications.rs` | Desktop notifications via `notify-rust` |
 
 ## Development
 

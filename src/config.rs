@@ -24,6 +24,7 @@ pub struct Config {
     pub watch: WatchConfig,
     pub integration: IntegrationConfig,
     pub logging: LoggingConfig,
+    pub notifications: NotificationConfig,
 }
 
 /// Watch directory configuration
@@ -92,6 +93,28 @@ impl Default for LoggingConfig {
         Self {
             level: "info".to_string(),
             file: None,
+        }
+    }
+}
+
+/// Notification configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NotificationConfig {
+    /// Enable desktop notifications
+    pub enabled: bool,
+    /// Notify on successful integration
+    pub on_integrate: bool,
+    /// Notify on unintegration
+    pub on_unintegrate: bool,
+}
+
+impl Default for NotificationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            on_integrate: true,
+            on_unintegrate: true,
         }
     }
 }

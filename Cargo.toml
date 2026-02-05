@@ -46,7 +46,7 @@ tempfile = "3"
 notify-rust = { version = "4", optional = true }
 
 [features]
-default = []
+default = ["notifications"]
 notifications = ["notify-rust"]
 
 [dev-dependencies]

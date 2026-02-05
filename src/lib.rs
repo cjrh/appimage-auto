@@ -7,6 +7,7 @@ pub mod appimage;
 pub mod config;
 pub mod daemon;
 pub mod desktop;
+pub mod notifications;
 pub mod state;
 pub mod watcher;
 

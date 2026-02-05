@@ -353,11 +353,18 @@ impl Daemon {
             identifier,
             path.to_path_buf(),
             desktop_path,
-            icon_paths,
-            info.name,
+            icon_paths.clone(),
+            info.name.clone(),
         );
         self.state.add(entry);
         self.state.save()?;
+
+        // Send notification
+        if self.config.notifications.enabled && self.config.notifications.on_integrate {
+            let name = info.name.as_deref().unwrap_or("AppImage");
+            let icon = icon_paths.first().map(|p| p.as_path());
+            crate::notifications::send(crate::notifications::integrated(name, path, icon));
+        }
 
         info!("Successfully integrated: {:?}", path);
         Ok(())
@@ -366,6 +373,15 @@ impl Daemon {
     /// Unintegrate an AppImage
     pub fn unintegrate(&mut self, path: &Path) -> Result<(), DaemonError> {
         if let Some(info) = self.state.remove_by_path(path) {
+            // Send notification before cleanup
+            if self.config.notifications.enabled && self.config.notifications.on_unintegrate {
+                let name = info.name.as_deref().unwrap_or("AppImage");
+                crate::notifications::send(crate::notifications::unintegrated(
+                    name,
+                    &info.appimage_path,
+                ));
+            }
+
             self.cleanup_integration(&info)?;
             self.state.save()?;
             info!("Successfully unintegrated: {:?}", path);
