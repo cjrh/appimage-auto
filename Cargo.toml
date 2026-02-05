@@ -1,6 +1,6 @@
 [package]
 name = "appimage-auto"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "Automatic AppImage integration daemon for Linux desktop environments"
 authors = ["Caleb"]
