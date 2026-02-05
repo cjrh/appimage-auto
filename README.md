@@ -4,7 +4,7 @@ A minimal, focused Rust daemon that automatically integrates AppImages into the 
 
 ## Why?
 
-Existing solutions have issues:
+Existing solutions have issues for me:
 
 | Tool | Problem |
 |------|---------|
@@ -12,8 +12,9 @@ Existing solutions have issues:
 | **AppImageLauncher** | Unmaintained since 2020, crashes on modern distros, uses problematic LD_PRELOAD |
 | **Gear Lever** | Manual only, requires drag-and-drop |
 
-You probably want `go-appimaged`. It is a "big" project with a larger team and more features. I
-just want something that:
+Realistically, You probably want to use `go-appimaged`.
+It is a "big" project with a larger team and more features.
+I just want something that:
 - notices I downloaded an AppImage,
 - makes it executable,
 - creates a .desktop file with the correct path and icon.
@@ -22,6 +23,9 @@ just want something that:
 **appimage-auto** does one thing well: watch directories and automatically integrate AppImages into your desktop menu.
 
 ![appimage-auto GUI overview](mainwindow.png)
+
+You can just download a new AppImage and it will get integrated into your desktop automatically.
+If you delete the AppImage, it will be removed. Simple.
 
 ## Features
 
@@ -38,10 +42,11 @@ just want something that:
 ## Installation
 
 Everything installs to your user home directory — no root access or system-level changes required.
+Even the background daemon runs as a systemd user service.
 
 ### Quick Install
 
-1. Download the latest `appimage-auto-*-x86_64-linux.zip` from [GitHub Releases](https://github.com/youruser/appimage-auto/releases)
+1. Download the latest `appimage-auto-*-x86_64-linux.zip` from [GitHub Releases](https://github.com/cjrh/appimage-auto/releases)
 2. Extract and run the installer:
 
 ```bash
