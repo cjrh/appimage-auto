@@ -11,6 +11,15 @@ success() { printf "${green}::${reset} %s\n" "$*"; }
 warn()    { printf "${yellow}:: WARNING:${reset} %s\n" "$*"; }
 error()   { printf "${red}:: ERROR:${reset} %s\n" "$*" >&2; }
 
+# --- Parse arguments ---
+REMOVE_DATA=""
+for arg in "$@"; do
+    case "$arg" in
+        --remove-data) REMOVE_DATA=y ;;
+        --keep-data)   REMOVE_DATA=n ;;
+    esac
+done
+
 # --- Guards ---
 if [[ $EUID -eq 0 ]]; then
     error "Do not run this script as root. It removes files from user directories."
@@ -58,10 +67,13 @@ success "appimage-auto uninstalled."
 echo ""
 
 # --- Prompt to remove user data ---
-remove_data=n
-if [[ -t 0 ]]; then
+if [[ -n "$REMOVE_DATA" ]]; then
+    remove_data="$REMOVE_DATA"
+elif [[ -t 0 ]]; then
     printf "%bRemove user configuration and state data? [y/N]%b " "$bold" "$reset"
     read -r remove_data
+else
+    remove_data=n
 fi
 
 if [[ "${remove_data,,}" == "y" ]]; then

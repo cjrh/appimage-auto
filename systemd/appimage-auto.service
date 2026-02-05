@@ -11,17 +11,8 @@ RestartSec=5
 
 # Security hardening
 NoNewPrivileges=true
-ProtectSystem=strict
-ProtectHome=read-only
-ReadWritePaths=%h/.local/share/applications
-ReadWritePaths=%h/.local/share/icons
-ReadWritePaths=%h/.config/appimage-auto
-ReadWritePaths=%h/.local/share/appimage-auto
-
-# Allow access to common AppImage locations
-ReadWritePaths=%h/Downloads
-ReadWritePaths=%h/Applications
-ReadWritePaths=%h/.local/bin
+ProtectSystem=full
+PrivateTmp=true
 
 [Install]
 WantedBy=default.target
