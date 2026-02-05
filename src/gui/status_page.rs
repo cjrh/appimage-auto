@@ -6,18 +6,21 @@ use relm4::adw::prelude::*;
 use relm4::gtk;
 use relm4::prelude::*;
 use relm4::{adw, ComponentParts, ComponentSender, RelmWidgetExt};
+use std::path::PathBuf;
 use std::process::Command;
 
 /// The status page model.
 pub struct StatusPage {
-    /// Number of integrated apps.
-    integrated_count: usize,
-    /// Number of watch directories.
-    watch_dir_count: usize,
     /// Daemon running status.
     daemon_running: bool,
-    /// Watch directories (for display).
-    watch_dirs: Vec<String>,
+    /// Number of integrated apps (for heading display).
+    integrated_count: usize,
+    /// Number of watch directories (for heading display).
+    watch_dir_count: usize,
+    /// ListBox for integrated app rows.
+    apps_list: gtk::ListBox,
+    /// ListBox for watch directory rows.
+    dirs_list: gtk::ListBox,
 }
 
 /// Messages for the status page.
@@ -74,80 +77,98 @@ impl SimpleComponent for StatusPage {
                         set_orientation: gtk::Orientation::Vertical,
                         set_spacing: 24,
 
-                        // Status banner
-                        adw::StatusPage {
-                            set_icon_name: Some("emblem-system-symbolic"),
-                            set_title: "AppImage Auto",
-                            #[watch]
-                            set_description: Some(&format!(
-                                "Daemon: {}",
-                                if model.daemon_running { "Running" } else { "Stopped" }
-                            )),
-                        },
-
-                        // Quick stats
+                        // Status banner (compact)
                         gtk::Box {
-                            set_orientation: gtk::Orientation::Horizontal,
-                            set_spacing: 12,
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 6,
                             set_halign: gtk::Align::Center,
+                            set_margin_top: 12,
+                            set_margin_bottom: 12,
 
-                            gtk::Button {
-                                add_css_class: "card",
-                                set_width_request: 150,
-                                connect_clicked => StatusPageMsg::NavigateToApps,
-
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical,
-                                    set_spacing: 6,
-                                    set_margin_all: 12,
-
-                                    gtk::Label {
-                                        #[watch]
-                                        set_label: &model.integrated_count.to_string(),
-                                        add_css_class: "title-1",
-                                    },
-                                    gtk::Label {
-                                        set_label: "Integrated Apps",
-                                        add_css_class: "dim-label",
-                                    },
-                                }
+                            gtk::Image {
+                                set_icon_name: Some("emblem-system-symbolic"),
+                                set_pixel_size: 64,
+                                add_css_class: "dim-label",
                             },
 
-                            gtk::Button {
-                                add_css_class: "card",
-                                set_width_request: 150,
-                                connect_clicked => StatusPageMsg::NavigateToSettings,
+                            gtk::Label {
+                                set_label: "AppImage Auto",
+                                add_css_class: "title-1",
+                            },
 
-                                gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical,
-                                    set_spacing: 6,
-                                    set_margin_all: 12,
-
-                                    gtk::Label {
-                                        #[watch]
-                                        set_label: &model.watch_dir_count.to_string(),
-                                        add_css_class: "title-1",
-                                    },
-                                    gtk::Label {
-                                        set_label: "Watch Directories",
-                                        add_css_class: "dim-label",
-                                    },
-                                }
+                            gtk::Label {
+                                #[watch]
+                                set_label: &format!(
+                                    "Daemon: {}",
+                                    if model.daemon_running { "Running" } else { "Stopped" }
+                                ),
+                                add_css_class: "dim-label",
                             },
                         },
 
-                        // Watch directories list
+                        // Integrated Apps section
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
                             set_spacing: 12,
 
-                            gtk::Label {
-                                set_label: "Watched Directories",
-                                set_halign: gtk::Align::Start,
-                                add_css_class: "heading",
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Horizontal,
+
+                                gtk::Label {
+                                    #[watch]
+                                    set_label: &format!(
+                                        "Integrated Apps ({})",
+                                        model.integrated_count
+                                    ),
+                                    set_halign: gtk::Align::Start,
+                                    set_hexpand: true,
+                                    add_css_class: "heading",
+                                },
+
+                                gtk::Button {
+                                    set_label: "View All",
+                                    add_css_class: "flat",
+                                    set_valign: gtk::Align::Center,
+                                    connect_clicked => StatusPageMsg::NavigateToApps,
+                                },
                             },
 
-                            gtk::ListBox {
+                            #[local_ref]
+                            apps_list_box -> gtk::ListBox {
+                                set_selection_mode: gtk::SelectionMode::None,
+                                add_css_class: "boxed-list",
+                            },
+                        },
+
+                        // Watch Directories section
+                        gtk::Box {
+                            set_orientation: gtk::Orientation::Vertical,
+                            set_spacing: 12,
+
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Horizontal,
+
+                                gtk::Label {
+                                    #[watch]
+                                    set_label: &format!(
+                                        "Watched Directories ({})",
+                                        model.watch_dir_count
+                                    ),
+                                    set_halign: gtk::Align::Start,
+                                    set_hexpand: true,
+                                    add_css_class: "heading",
+                                },
+
+                                gtk::Button {
+                                    set_label: "Settings",
+                                    add_css_class: "flat",
+                                    set_valign: gtk::Align::Center,
+                                    connect_clicked => StatusPageMsg::NavigateToSettings,
+                                },
+                            },
+
+                            #[local_ref]
+                            dirs_list_box -> gtk::ListBox {
                                 set_selection_mode: gtk::SelectionMode::None,
                                 add_css_class: "boxed-list",
                             },
@@ -163,13 +184,19 @@ impl SimpleComponent for StatusPage {
         root: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
+        let apps_list = gtk::ListBox::new();
+        let dirs_list = gtk::ListBox::new();
+
         let model = Self {
+            daemon_running: false,
             integrated_count: 0,
             watch_dir_count: 0,
-            daemon_running: false,
-            watch_dirs: Vec::new(),
+            apps_list: apps_list.clone(),
+            dirs_list: dirs_list.clone(),
         };
 
+        let apps_list_box = &model.apps_list;
+        let dirs_list_box = &model.dirs_list;
         let widgets = view_output!();
 
         // Initial refresh
@@ -198,27 +225,96 @@ impl SimpleComponent for StatusPage {
 }
 
 impl StatusPage {
-    /// Refresh all status information.
     fn refresh_status(&mut self) {
-        // Load state
+        clear_list(&self.apps_list);
+        clear_list(&self.dirs_list);
+
+        // Load and populate integrated apps
         if let Ok(state) = State::load() {
-            self.integrated_count = state.count();
+            let mut apps: Vec<_> = state.all().cloned().collect();
+            apps.sort_by(|a, b| {
+                let name_a = a.name.as_deref().unwrap_or("");
+                let name_b = b.name.as_deref().unwrap_or("");
+                name_a.to_lowercase().cmp(&name_b.to_lowercase())
+            });
+
+            self.integrated_count = apps.len();
+
+            if apps.is_empty() {
+                add_placeholder(&self.apps_list, "No integrated apps");
+            } else {
+                for app in &apps {
+                    let name = app.name.clone().unwrap_or_else(|| {
+                        app.appimage_path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "Unknown".to_string())
+                    });
+                    let exists = app.appimage_path.exists();
+                    let icon = if exists {
+                        "application-x-executable-symbolic"
+                    } else {
+                        "dialog-warning-symbolic"
+                    };
+
+                    let row = adw::ActionRow::new();
+                    row.set_title(&name);
+                    row.set_subtitle(&app.appimage_path.display().to_string());
+                    row.add_prefix(&gtk::Image::from_icon_name(icon));
+                    self.apps_list.append(&row);
+                }
+            }
         } else {
             self.integrated_count = 0;
+            add_placeholder(&self.apps_list, "No integrated apps");
         }
 
-        // Load config
+        // Load and populate watch directories
         if let Ok(config) = Config::load() {
             self.watch_dir_count = config.watch.directories.len();
-            self.watch_dirs = config.watch.directories.clone();
+
+            if config.watch.directories.is_empty() {
+                add_placeholder(&self.dirs_list, "No watched directories");
+            } else {
+                for dir in &config.watch.directories {
+                    let expanded = shellexpand::tilde(dir);
+                    let expanded_path = PathBuf::from(expanded.as_ref());
+                    let exists = expanded_path.exists();
+                    let icon = if exists {
+                        "folder-symbolic"
+                    } else {
+                        "dialog-warning-symbolic"
+                    };
+
+                    let row = adw::ActionRow::new();
+                    row.set_title(dir);
+                    if dir != expanded.as_ref() {
+                        row.set_subtitle(&expanded_path.display().to_string());
+                    }
+                    row.add_prefix(&gtk::Image::from_icon_name(icon));
+                    self.dirs_list.append(&row);
+                }
+            }
         } else {
             self.watch_dir_count = 0;
-            self.watch_dirs = Vec::new();
+            add_placeholder(&self.dirs_list, "No watched directories");
         }
 
-        // Check daemon status (via systemctl or pgrep)
         self.daemon_running = is_daemon_running();
     }
+}
+
+fn clear_list(list: &gtk::ListBox) {
+    while let Some(child) = list.first_child() {
+        list.remove(&child);
+    }
+}
+
+fn add_placeholder(list: &gtk::ListBox, title: &str) {
+    let row = adw::ActionRow::new();
+    row.set_title(title);
+    row.add_css_class("dim-label");
+    list.append(&row);
 }
 
 /// Check if the daemon is running.

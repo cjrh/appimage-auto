@@ -19,6 +19,8 @@ pub struct AppModel {
     app_list_page: Controller<AppListPage>,
     /// Settings page component.
     settings_page: Controller<SettingsPage>,
+    /// View stack for tab switching.
+    view_stack: adw::ViewStack,
 }
 
 /// Messages for the main application.
@@ -57,12 +59,23 @@ impl SimpleComponent for AppModel {
         adw::ApplicationWindow {
             set_title: Some("AppImage Auto Settings"),
             set_default_width: 700,
-            set_default_height: 500,
+            set_default_height: 700,
 
-            #[name(toast_overlay)]
-            adw::ToastOverlay {
-                #[name(view_stack)]
-                adw::ViewStack {}
+            gtk::Box {
+                set_orientation: gtk::Orientation::Vertical,
+
+                #[name(toast_overlay)]
+                adw::ToastOverlay {
+                    set_vexpand: true,
+
+                    #[name(view_stack)]
+                    adw::ViewStack {}
+                },
+
+                #[name(switcher_bar)]
+                adw::ViewSwitcherBar {
+                    set_reveal: true,
+                },
             }
         }
     }
@@ -85,13 +98,16 @@ impl SimpleComponent for AppModel {
             .launch(())
             .forward(sender.input_sender(), AppMsg::SettingsPageOutput);
 
-        let model = Self {
+        let mut model = Self {
             status_page,
             app_list_page,
             settings_page,
+            view_stack: adw::ViewStack::new(),
         };
 
         let widgets = view_output!();
+        model.view_stack = widgets.view_stack.clone();
+        widgets.switcher_bar.set_stack(Some(&widgets.view_stack));
 
         // Add pages to the view stack
         let status_page_widget = model.status_page.widget().clone();
@@ -201,8 +217,8 @@ impl SimpleComponent for AppModel {
                 self.settings_page.emit(SettingsPageMsg::DirectorySelected(path));
             }
             AppMsg::StatusPageOutput(output) => match output {
-                StatusPageOutput::NavigateTo(_page) => {
-                    // View stack switching handled by user clicking tabs
+                StatusPageOutput::NavigateTo(page) => {
+                    self.view_stack.set_visible_child_name(&page);
                 }
             },
             AppMsg::AppListPageOutput(output) => match output {
