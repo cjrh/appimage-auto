@@ -186,6 +186,13 @@ impl Daemon {
             if let Err(e) = self.process_pending_events() {
                 error!("Error processing pending events: {}", e);
             }
+
+            // Reload state if modified externally (e.g., by the GUI)
+            if self.state.modified_externally() {
+                if let Err(e) = self.state.reload() {
+                    warn!("Failed to reload state from disk: {}", e);
+                }
+            }
         }
 
         info!("Daemon stopped");

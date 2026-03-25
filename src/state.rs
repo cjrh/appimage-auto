@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, info};
 
 #[derive(Error, Debug)]
 pub enum StateError {
@@ -44,6 +45,9 @@ pub struct State {
     /// Map from AppImage path to identifier (for quick lookup)
     #[serde(skip)]
     path_index: HashMap<PathBuf, String>,
+    /// Last known mtime of the state file on disk (to detect external changes)
+    #[serde(skip)]
+    last_saved_mtime: Option<SystemTime>,
 }
 
 impl State {
@@ -63,11 +67,12 @@ impl State {
         let content = fs::read_to_string(path)?;
         let mut state: State = serde_json::from_str(&content)?;
         state.rebuild_index();
+        state.last_saved_mtime = fs::metadata(path).ok().and_then(|m| m.modified().ok());
         Ok(state)
     }
 
     /// Save state to the default location
-    pub fn save(&self) -> Result<(), StateError> {
+    pub fn save(&mut self) -> Result<(), StateError> {
         let state_path = Self::state_path()?;
 
         if let Some(parent) = state_path.parent() {
@@ -76,7 +81,31 @@ impl State {
 
         let content = serde_json::to_string_pretty(self)?;
         fs::write(&state_path, content)?;
+        self.last_saved_mtime = fs::metadata(&state_path).ok().and_then(|m| m.modified().ok());
         debug!("Saved state to {:?}", state_path);
+        Ok(())
+    }
+
+    /// Check if the state file on disk has been modified externally.
+    /// Returns true if the file mtime differs from the last known save.
+    pub fn modified_externally(&self) -> bool {
+        let Ok(state_path) = Self::state_path() else {
+            return false;
+        };
+        let current_mtime = fs::metadata(&state_path).ok().and_then(|m| m.modified().ok());
+        current_mtime != self.last_saved_mtime
+    }
+
+    /// Reload state from disk, replacing in-memory contents.
+    pub fn reload(&mut self) -> Result<(), StateError> {
+        let state_path = Self::state_path()?;
+        if state_path.exists() {
+            let reloaded = Self::load_from(&state_path)?;
+            info!("Reloaded state from disk ({} entries)", reloaded.count());
+            self.integrated = reloaded.integrated;
+            self.path_index = reloaded.path_index;
+            self.last_saved_mtime = reloaded.last_saved_mtime;
+        }
         Ok(())
     }
 
