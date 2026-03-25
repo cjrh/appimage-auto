@@ -278,6 +278,31 @@ The daemon only tracks moves within watched directories. Moving an AppImage to a
 
 Some AppImages don't include icons. The integration will still work, but without a custom icon.
 
+## Releasing
+
+Releases are automated via GitHub Actions. Pushing a version tag triggers a build and creates a GitHub Release with the bundled zip.
+
+To create a release using [cargo-release](https://github.com/crates-io/cargo-release):
+
+```bash
+# Install cargo-release (one-time)
+cargo install cargo-release
+
+# Dry run (no changes made)
+cargo release patch
+
+# Create a patch release (0.2.1 → 0.2.2)
+cargo release patch --execute
+
+# Create a minor release (0.2.1 → 0.3.0)
+cargo release minor --execute
+
+# Create a major release (0.2.1 → 1.0.0)
+cargo release major --execute
+```
+
+This bumps the version in `Cargo.toml`, commits, tags, and pushes — triggering the release workflow.
+
 ## License
 
 MIT

@@ -1,0 +1,8 @@
+allow-branch = ["main"]
+sign-commit = false
+sign-tag = false
+tag-prefix = ""
+tag-name = "{{version}}"
+pre-release-commit-message = "Release {{version}}"
+publish = false
+push = true
