@@ -275,6 +275,13 @@ fn try_selective_extract(appimage_path: &Path, extract_dir: &Path) -> bool {
 
     let desktop_ok = desktop_result.map(|o| o.status.success()).unwrap_or(false);
 
+    // Also extract desktop files from standard freedesktop path (symlink targets)
+    let _ = Command::new(appimage_path)
+        .arg("--appimage-extract")
+        .arg("usr/share/applications/*.desktop")
+        .current_dir(extract_dir)
+        .output();
+
     // Try to extract icons (various formats and locations)
     let icon_patterns = ["*.png", "*.svg", "*.xpm", "usr/share/icons/*", ".DirIcon"];
 
@@ -333,7 +340,8 @@ fn find_extracted_files(
                     "desktop" => {
                         // Prefer .desktop files in the root of squashfs-root
                         if desktop_file.is_none() || path.parent() == Some(&search_dir) {
-                            desktop_file = Some(path);
+                            // Resolve symlinks so we point to the actual file
+                            desktop_file = Some(fs::canonicalize(&path).unwrap_or(path));
                         }
                     }
                     "png" | "svg" | "xpm" => {
